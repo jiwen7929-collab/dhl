@@ -1,7 +1,8 @@
-import sqlite3, os
+import os
+import sqlite3
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -11,7 +12,12 @@ DB_PATH = BASE_DIR / "records.db"
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN", "123456")
 
 app = FastAPI(title="查岗系统")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def get_db():
     conn = sqlite3.connect(str(DB_PATH))
@@ -38,7 +44,6 @@ class ReportBody(BaseModel):
     app_name: str
     event: str
 
-# 专门给 Railway 提供的健康检查接口（防止 30 秒杀进程）
 @app.get("/")
 async def root():
     return {"status": "ok", "message": "Server is running"}
@@ -50,7 +55,10 @@ async def report(body: ReportBody, req: Request):
         raise HTTPException(401, "Unauthorized")
     now = datetime.utcnow().isoformat()
     conn = sqlite3.connect(str(DB_PATH))
-    conn.execute("INSERT INTO records (app_name, event, timestamp) VALUES (?, ?, ?)", (body.app_name, body.event, now))
+    conn.execute(
+        "INSERT INTO records (app_name, event, timestamp) VALUES (?, ?, ?)",
+        (body.app_name, body.event, now),
+    )
     conn.commit()
     conn.close()
     return {"status": "ok"}
@@ -64,25 +72,28 @@ async def summary():
     try:
         conn = sqlite3.connect(str(DB_PATH))
         cur = conn.cursor()
-        cur.execute("SELECT app_name, event, timestamp FROM records ORDER BY id DESC LIMIT 5")
+        cur.execute(
+            "SELECT app_name, event, timestamp FROM records ORDER BY id DESC LIMIT 5"
+        )
         recent = cur.fetchall()
-        cur.execute("SELECT app_name, event, timestamp FROM records ORDER BY id ASC")
+        cur.execute(
+            "SELECT app_name, event, timestamp FROM records ORDER BY id ASC"
+        )
         rows = cur.fetchall()
         conn.close()
-        
+
         sessions, opens = {}, {}
         for r in rows:
             app, ev, ts = r
             if ev == "open":
                 opens[app] = datetime.fromisoformat(ts)
             elif ev == "close" and app in opens:
-                gap = int((datetime.fromisoformat(ts) - opens[app]).total_seconds())
+                gap = int(
+                    (datetime.fromisoformat(ts) - opens[app]).total_seconds()
+                )
                 sessions[app] = sessions.get(app, 0) + gap
                 del opens[app]
-        return {
-            "recent_apps": [r[0] for r in recent],
-            "sessions": sessions
-        }
+        return {"recent_apps": [r[0] for r in recent], "sessions": sessions}
     except Exception as e:
         return {"recent_apps": [], "sessions": {}, "error": str(e)}
 
