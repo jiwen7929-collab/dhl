@@ -38,6 +38,11 @@ class ReportBody(BaseModel):
     app_name: str
     event: str
 
+# 专门给 Railway 提供的健康检查接口（防止 30 秒杀进程）
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "Server is running"}
+
 @app.post("/report")
 async def report(body: ReportBody, req: Request):
     auth = req.headers.get("Authorization", "")
